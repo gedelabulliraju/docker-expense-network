@@ -2,104 +2,136 @@ const transactionService = require('./TransactionService');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const os = require('os');
-const fetch = require('node-fetch');
 const moment = require('moment');
 
 const app = express();
-const port = 8080;
+const port = process.env.PORT || 8080;
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cors());
 
-// ROUTES FOR OUR API
-// =======================================================
-
-//Health Checking
-app.get('/health',(req,res)=>{
-    res.json("This is the health check");
+// Health Check
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'healthy' });
 });
 
 // ADD TRANSACTION
-app.post('/transaction', (req,res)=>{
-    var response = "";
-    try{
-        t=moment().unix()
-        console.log("{ \"timestamp\" : %d, \"msg\", \"Adding Expense\", \"amount\" : %d, \"Description\": \"%s\" }", t, req.body.amount, req.body.desc);
-        var success = transactionService.addTransaction(req.body.amount,req.body.desc);
-        if (success = 200) res.json({ message: 'added transaction successfully'});
-    }catch (err){
-        res.json({ message: 'something went wrong', error : err.message});
+app.post('/transaction', async (req, res) => {
+    try {
+        const { amount, description } = req.body;
+        
+        if (!amount || !description) {
+            return res.status(400).json({ message: 'Amount and description are required' });
+        }
+
+        await transactionService.addTransaction(amount, description);
+        
+        const timestamp = moment().unix();
+        console.log({ 
+            timestamp,
+            message: 'Adding Expense',
+            amount,
+            description
+        });
+
+        res.status(201).json({ message: 'Transaction added successfully' });
+    } catch (err) {
+        console.error('Transaction Error:', err);
+        res.status(500).json({ message: 'Failed to add transaction', error: err.message });
     }
 });
 
 // GET ALL TRANSACTIONS
-app.get('/transaction',(req,res)=>{
-    try{
-        var transactionList = [];
-       transactionService.getAllTransactions(function (results) {
-            //console.log("we are in the call back:");
-            for (const row of results) {
-                transactionList.push({ "id": row.id, "amount": row.amount, "description": row.description });
-            }
-            t=moment().unix()
-            console.log("{ \"timestamp\" : %d, \"msg\" : \"Getting All Expenses\" }", t);
-            console.log("{ \"expenses\" : %j }", transactionList);
-            res.statusCode = 200;
-            res.json({"result":transactionList});
-        });
-    }catch (err){
-        res.json({message:"could not get all transactions",error: err.message});
-    }
-});
-
-//DELETE ALL TRANSACTIONS
-app.delete('/transaction',(req,res)=>{
-    try{
-        transactionService.deleteAllTransactions(function(result){
-            t=moment().unix()
-            console.log("{ \"timestamp\" : %d, \"msg\" : \"Deleted All Expenses\" }", t);
-            res.statusCode = 200;
-            res.json({message:"delete function execution finished."})
-        })
-    }catch (err){
-        res.json({message: "Deleting all transactions may have failed.", error:err.message});
-    }
-});
-
-//DELETE ONE TRANSACTION
-app.delete('/transaction/id', (req,res)=>{
-    try{
-        //probably need to do some kind of parameter checking
-        transactionService.deleteTransactionById(req.body.id, function(result){
-            res.statusCode = 200;
-            res.json({message: `transaction with id ${req.body.id} seemingly deleted`});
-        })
-    } catch (err){
-        res.json({message:"error deleting transaction", error: err.message});
-    }
-});
-
-//GET SINGLE TRANSACTION
-app.get('/transaction/id',(req,res)=>{
-    //also probably do some kind of parameter checking here
-    try{
-        transactionService.findTransactionById(req.body.id,function(result){
-            res.statusCode = 200;
-            var id = result[0].id;
-            var amt = result[0].amount;
-            var desc= result[0].desc;
-            res.json({"id":id,"amount":amt,"desc":desc});
+app.get('/transactions', async (req, res) => {
+    try {
+        const transactions = await transactionService.getAllTransactions();
+        
+        const timestamp = moment().unix();
+        console.log({ 
+            timestamp,
+            message: 'Retrieved All Expenses',
+            count: transactions.length
         });
 
-    }catch(err){
-        res.json({message:"error retrieving transaction", error: err.message});
+        res.status(200).json(transactions);
+    } catch (err) {
+        console.error('Get Transactions Error:', err);
+        res.status(500).json({ message: 'Failed to get transactions', error: err.message });
     }
 });
 
-  app.listen(port, () => {
-    t=moment().unix()
-    console.log("{ \"timestamp\" : %d, \"msg\" : \"App Started on Port %s\" }", t,  port)
-  })
-//
+// DELETE ALL TRANSACTIONS
+app.delete('/transactions', async (req, res) => {
+    try {
+        await transactionService.deleteAllTransactions();
+        
+        const timestamp = moment().unix();
+        console.log({ 
+            timestamp,
+            message: 'Deleted All Expenses'
+        });
+
+        res.status(200).json({ message: 'All transactions deleted successfully' });
+    } catch (err) {
+        console.error('Delete All Error:', err);
+        res.status(500).json({ message: 'Failed to delete transactions', error: err.message });
+    }
+});
+
+// DELETE SINGLE TRANSACTION
+app.delete('/transaction/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            return res.status(400).json({ message: 'Invalid transaction ID' });
+        }
+
+        const result = await transactionService.deleteTransactionById(id);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+
+        console.log(`Deleted transaction with id ${id}`);
+        res.status(200).json({ message: `Transaction ${id} deleted successfully` });
+    } catch (err) {
+        console.error('Delete Error:', err);
+        res.status(500).json({ message: 'Failed to delete transaction', error: err.message });
+    }
+});
+
+// GET SINGLE TRANSACTION
+app.get('/transaction/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            return res.status(400).json({ message: 'Invalid transaction ID' });
+        }
+
+        const transaction = await transactionService.findTransactionById(id);
+        
+        if (!transaction) {
+            return res.status(404).json({ message: 'Transaction not found' });
+        }
+
+        res.status(200).json(transaction);
+    } catch (err) {
+        console.error('Get Transaction Error:', err);
+        res.status(500).json({ message: 'Failed to get transaction', error: err.message });
+    }
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+});
+
+app.listen(port, () => {
+    const timestamp = moment().unix();
+    console.log({ 
+        timestamp,
+        message: `Server started on port ${port}`
+    });
+});
