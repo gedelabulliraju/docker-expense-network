@@ -130,7 +130,8 @@ app.get('/transaction/:id', async (req, res) => {
     const timestamp = moment().unix();
     try {
         const id = parseInt(req.params.id);
-        if (isNaN(id) {
+        // FIXED: Added missing parenthesis
+        if (isNaN(id)) {
             return res.status(400).json({ 
                 message: 'Invalid transaction ID',
                 timestamp
@@ -236,11 +237,50 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(port, () => {
-    const timestamp = moment().unix();
-    console.log(JSON.stringify({
-        timestamp,
-        level: 'INFO',
-        message: `Server started on port ${port}`
+// Database connection check before starting server
+const waitForDatabase = async () => {
+    const maxAttempts = 10;
+    for (let i = 0; i < maxAttempts; i++) {
+        try {
+            // Test database connection
+            const connection = await transactionService.pool.getConnection();
+            await connection.ping();
+            connection.release();
+            console.log(JSON.stringify({
+                timestamp: moment().unix(),
+                level: 'INFO',
+                message: 'Database connection successful'
+            }));
+            return;
+        } catch (err) {
+            console.log(JSON.stringify({
+                timestamp: moment().unix(),
+                level: 'WARN',
+                message: `Database connection attempt ${i+1}/${maxAttempts} failed`,
+                error: err.message
+            }));
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+    throw new Error('Failed to connect to database after multiple attempts');
+};
+
+// Start server after database is ready
+waitForDatabase().then(() => {
+    app.listen(port, () => {
+        const timestamp = moment().unix();
+        console.log(JSON.stringify({
+            timestamp,
+            level: 'INFO',
+            message: `Server started on port ${port}`
+        }));
+    });
+}).catch(err => {
+    console.error(JSON.stringify({
+        timestamp: moment().unix(),
+        level: 'FATAL',
+        message: 'Server startup failed',
+        error: err.message
     }));
+    process.exit(1);
 });
