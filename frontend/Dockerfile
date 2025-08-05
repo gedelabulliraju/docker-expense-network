@@ -6,6 +6,7 @@
 FROM nginx:stable-alpine-slim
 RUN rm -f /etc/nginx/conf.d/default.conf && \
     rm -f /etc/nginx/nginx.conf && \
+    mkdir -p /usr/share/nginx/html && \
     mkdir -p /var/cache/nginx/client_temp && \
     mkdir -p /var/cache/nginx/proxy_temp && \
     mkdir -p /var/cache/nginx/fastcgi_temp && \
