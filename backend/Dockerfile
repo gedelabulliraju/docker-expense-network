@@ -11,7 +11,6 @@ COPY package.json .
 COPY *.js .
 RUN npm install
 RUN user expense
-
 CMD ["node", "index.js"]
 # FROM node:20
 # EXPOSE 8080
