@@ -4,9 +4,9 @@ ENV DB_HOST="mysql"
 RUN adduser -S expense
 RUN addgroup -S expense
 USER expense:expense
+RUN chown -R expense:expense /opt/server
 RUN mkdir /opt/server
 WORKDIR /opt/server
-RUN chown -R expense:expense /opt/server
 COPY package.json .
 COPY *.js .
 RUN npm install
