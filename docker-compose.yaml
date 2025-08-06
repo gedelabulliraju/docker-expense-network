@@ -5,8 +5,6 @@ services:
   mysql:
     image: srlaf/mysql:v1
     container_name: mysql # --name mysql
-    ports:
-    - 3306:3306
   backend:
     image: srlaf/backend:v1
     container_name: backend
